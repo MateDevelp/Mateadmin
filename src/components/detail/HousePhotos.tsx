@@ -35,7 +35,7 @@ export default function HousePhotos({ photos, title }: HousePhotosProps) {
             <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                     <Building2 className="w-5 h-5" />
-                    Foto della Casa
+                    Foto della Casa.
                     <Badge variant="outline" className="ml-auto">
                         {photos.length} {photos.length === 1 ? 'foto' : 'foto'}
                     </Badge>
