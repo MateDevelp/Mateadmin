@@ -1,0 +1,283 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    
+    // ✅ Admin check unificato: supporta sia custom claim che Firestore field
+    function isAdmin() {
+      return isSignedIn() && (
+        // Admin Panel: usa custom claim (admin.mateapp.it)
+        (request.auth.token.admin == true) ||
+        // Main App: usa Firestore field (mateapp.it)
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'))
+      );
+    }
+
+    match /users/{uid} {
+      // Lettura consentita a tutti gli utenti autenticati (lista + get). L'accesso /admin filtrato lato client.
+      allow read: if isSignedIn();
+      // Scrittura del proprio documento o qualsiasi documento se admin.
+      allow create: if isOwner(uid) || isAdmin();
+      // Update: proprietario, admin globale, oppure se sta modificando solo campi specifici
+      allow update: if isOwner(uid) || isAdmin() || (
+        // Permetti aggiornamento solo di campi specifici
+        isSignedIn() && 
+        request.auth.uid == uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['refinementTracking', 'trioChoices', 'dynamicWeights', 'blockedUsers'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Nuova collezione: profili "maters" per metadati pubblici (es. ultimo accesso)
+    match /maters/{uid} {
+      // Lettura consentita agli utenti autenticati (serve per mostrare lastAccessAt nei profili)
+      allow read: if isSignedIn();
+      // Scrittura consentita al proprietario del documento o admin
+      allow create, update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Richieste di verifica documento/selfie (id documento = uid utente)
+    match /verifications/{uid} {
+      // Utente crea la propria richiesta (anche se esiste già, per permettere ri-sottomissione)
+      allow create, update: if isOwner(uid);
+      // Lettura singola: proprietario o admin
+      allow get: if isOwner(uid) || isAdmin();
+      // Lista completa solo admin
+      allow list: if isAdmin();
+      // Modifica / cancellazione solo admin (approvazione o rifiuto)
+      allow delete: if isAdmin();
+    }
+
+    // Case con ID indipendente: autorizza il proprietario (ownerId o owners[] contiene l'uid)
+    match /houses/{houseId} {
+      allow get, list: if true;
+      // Creazione: l'owner deve essere l'utente autenticato oppure admin
+      allow create: if isAdmin() || (isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        (request.resource.data.owners is list && request.auth.uid in request.resource.data.owners)
+      ));
+      // Update/Delete: l'owner corrente o un admin
+      allow update, delete: if isAdmin() || (isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.owners is list && request.auth.uid in resource.data.owners)
+      ));
+    }
+
+    // Gruppi: i membri possono leggere (query e get), aggiornare solo il campo members, creare/eliminare come prima
+    match /groups/{groupId} {
+      // Creazione: l'utente autenticato deve essere adminUid e presente in members
+      allow create: if isSignedIn() &&
+        request.resource.data.adminUid == request.auth.uid &&
+        (request.resource.data.members is list && request.auth.uid in request.resource.data.members);
+
+      // Lettura (get e query): tutti gli utenti autenticati possono leggere i gruppi
+      // Questo permette di vedere i profili degli altri utenti con le loro info gruppo
+      allow read: if isSignedIn();
+
+      // Update: solo membri possono modificare 'members', solo admin del gruppo può modificare altri campi
+      allow update: if isSignedIn() && (
+        // Membri possono aggiornare solo il campo members (join/leave)
+        (request.auth.uid in resource.data.members || request.auth.uid in request.resource.data.members) &&
+        resource.data.diff(request.resource.data).changedKeys().hasOnly(['members'])
+      ) || (
+        // L'admin del gruppo può modificare vari campi del gruppo
+        isSignedIn() &&
+        resource.data.adminUid == request.auth.uid &&
+        (
+          // Può modificare adminUid e name
+          resource.data.diff(request.resource.data).changedKeys().hasOnly(['adminUid', 'name']) ||
+          // Può modificare solo il nome
+          resource.data.diff(request.resource.data).changedKeys().hasOnly(['name']) ||
+          // Può modificare solo adminUid
+          resource.data.diff(request.resource.data).changedKeys().hasOnly(['adminUid']) ||
+          // Può collegare/scollegare casa (houseId e linkedAt)
+          resource.data.diff(request.resource.data).changedKeys().hasOnly(['houseId', 'linkedAt']) ||
+          // Può solo modificare houseId
+          resource.data.diff(request.resource.data).changedKeys().hasOnly(['houseId']) ||
+          // Può solo modificare linkedAt
+          resource.data.diff(request.resource.data).changedKeys().hasOnly(['linkedAt'])
+        )
+      );
+
+      // Delete: admin globale o adminUid del gruppo
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.adminUid == request.auth.uid);
+    }
+
+    // Codici di gruppo
+    match /groupCodes/{code} {
+      // Creazione consentita agli utenti autenticati (il client scrive: {groupId, createdBy, createdAt, expiresAt})
+      allow create: if isSignedIn();
+      // Lettura (get e list/query): consentita agli utenti autenticati per validare/recuperare codici
+      // I membri del gruppo devono poter fare query per trovare il codice del proprio gruppo
+      allow read: if isSignedIn();
+      // Aggiornamento non consentito (i codici non vanno modificati)
+      allow update: if false;
+      // Eliminazione: admin globale o admin del gruppo (controllando il groupId)
+      allow delete: if isAdmin() || (
+        isSignedIn() && 
+        exists(/databases/$(database)/documents/groups/$(resource.data.groupId)) &&
+        get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.adminUid == request.auth.uid
+      );
+    }
+
+    // Conversazioni chat
+    match /conversations/{cid} {
+      // Creazione: diretta o gruppo
+      allow create: if isSignedIn() && (
+        (
+          request.resource.data.type == 'direct' &&
+          (request.resource.data.participants is list) &&
+          (request.auth.uid in request.resource.data.participants)
+        ) || (
+          // Gruppo: qualsiasi utente autenticato può creare conversazione di gruppo
+          request.resource.data.type == 'group' &&
+          (request.resource.data.groupId is string) &&
+          exists(/databases/$(database)/documents/groups/$(request.resource.data.groupId))
+        )
+      );
+
+      // Lettura: partecipante, utenti autenticati per gruppi, o admin
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (resource.data.type == 'group') ||
+        (request.auth.uid in resource.data.participants)
+      );
+
+      // Update limitata: solo lastMessage, updatedAt, lastReadBy, groupName; consentita a qualsiasi utente autenticato per gruppi o admin
+      allow update: if isAdmin() || (isSignedIn() && (
+        (resource.data.type == 'group' && 
+         request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastMessage','updatedAt','lastReadBy','groupName','participants'])) ||
+        (request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastMessage','updatedAt','lastReadBy']) &&
+         (request.auth.uid in resource.data.participants))
+      ));
+
+      // Delete: solo admin
+      allow delete: if isAdmin();
+
+      match /messages/{mid} {
+        function canReadWriteMsg() {
+          let conv = get(/databases/$(database)/documents/conversations/$(cid)).data;
+          // Per gruppi: qualsiasi utente autenticato può leggere/scrivere
+          // Per dirette: solo partecipanti
+          return (conv.type == 'group') ||
+                 (request.auth.uid in conv.participants);
+        }
+
+        allow read: if isAdmin() || (isSignedIn() && canReadWriteMsg());
+        // Permetti campi standard + metadata moderazione (hasProfanity, flagged)
+        allow create: if isSignedIn() && canReadWriteMsg() && (
+          // Campi obbligatori
+          request.resource.data.from == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.createdAt is timestamp &&
+          // Campi opzionali permessi
+          (
+            request.resource.data.keys().hasOnly(['from','text','createdAt']) ||
+            request.resource.data.keys().hasOnly(['from','text','createdAt','senderName']) ||
+            request.resource.data.keys().hasOnly(['from','text','createdAt','hasProfanity','flagged']) ||
+            request.resource.data.keys().hasOnly(['from','text','createdAt','senderName','hasProfanity','flagged'])
+          )
+        );
+        allow update, delete: if false;
+      }
+    }
+
+    // 🎯 Trio Refinement Logs - Analytics per il sistema di affinamento preferenze
+    match /trioRefinementLogs/{logId} {
+      // Scrittura consentita solo al proprietario o admin
+      allow create: if isSignedIn() && (
+        request.resource.data.uid == request.auth.uid || isAdmin()
+      );
+      // Lettura: proprietario dei propri log o admin
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid || isAdmin()
+      );
+      // Nessun update/delete (log immutabili)
+      allow update, delete: if false;
+    }
+
+    // 🏠 House Verifications - Richieste di verifica case
+    match /houseVerifications/{houseId} {
+      // Creazione: solo il proprietario della casa può creare la richiesta
+      allow create: if isSignedIn() && (
+        exists(/databases/$(database)/documents/houses/$(houseId)) &&
+        (get(/databases/$(database)/documents/houses/$(houseId)).data.ownerId == request.auth.uid ||
+         (get(/databases/$(database)/documents/houses/$(houseId)).data.owners is list && 
+          request.auth.uid in get(/databases/$(database)/documents/houses/$(houseId)).data.owners))
+      );
+      
+      // Lettura: proprietario della casa o admin
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/houses/$(houseId)) &&
+         (get(/databases/$(database)/documents/houses/$(houseId)).data.ownerId == request.auth.uid ||
+          (get(/databases/$(database)/documents/houses/$(houseId)).data.owners is list && 
+           request.auth.uid in get(/databases/$(database)/documents/houses/$(houseId)).data.owners)))
+      );
+      
+      // Update: solo admin (per approvare/rifiutare)
+      allow update: if isAdmin();
+      
+      // Delete: admin o proprietario
+      allow delete: if isAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/houses/$(houseId)) &&
+        (get(/databases/$(database)/documents/houses/$(houseId)).data.ownerId == request.auth.uid ||
+         (get(/databases/$(database)/documents/houses/$(houseId)).data.owners is list && 
+          request.auth.uid in get(/databases/$(database)/documents/houses/$(houseId)).data.owners))
+      );
+    }
+
+    // 🔍 Room Searches - Ricerche stanze degli utenti
+    match /roomSearches/{searchId} {
+      // Creazione: solo l'utente autenticato può creare la propria ricerca
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      
+      // Lettura: tutti gli utenti autenticati possono vedere le ricerche attive (per matching)
+      // Il proprietario può vedere anche quelle non attive
+      allow read: if isSignedIn();
+      
+      // Update: solo il proprietario può modificare la propria ricerca
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // Delete: proprietario o admin
+      allow delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // 📊 Audit Log - Solo admin (per Admin Panel)
+    match /auditLog/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 🚨 Reports - Segnalazioni utenti/contenuti
+    match /reports/{reportId} {
+      // Creazione: utenti autenticati possono segnalare
+      allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      // Lettura/modifica: solo admin
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 🚫 Blocked Users - Utenti bloccati (lista personale di ogni utente)
+    match /users/{userId}/blockedUsers/{blockedUid} {
+      // Lettura/scrittura: solo il proprietario della lista
+      allow read, write: if isOwner(userId);
+    }
+
+    // 🔒 Banned Users - Utenti bannati globalmente (solo admin)
+    match /bannedUsers/{bannedUid} {
+      // Solo admin può leggere/scrivere
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

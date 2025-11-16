@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "mate-website-cd962"
+  },
+  "targets": {
+    "mate-website-cd962": {
+      "hosting": {
+        "admin": [
+          "mate-dahboard-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
