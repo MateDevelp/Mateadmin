@@ -6,7 +6,8 @@
     "mate-website-cd962": {
       "hosting": {
         "admin": [
-          "mate-dahboard-admin"
+          "mate-dahboard-admin",
+          "mate-website-cd962"
         ]
       }
     }
