@@ -28,7 +28,7 @@ const getTraitInfo = (id: number): { label: string; icon: string; category: stri
         95: { label: 'Stand-up comedy', icon: '🎭', category: 'interests' },
         176: { label: 'Determinato', icon: '🎯', category: 'values' }
     };
-    
+
     return traitMap[id] || { label: `Trait #${id}`, icon: '⭐', category: 'other' };
 };
 

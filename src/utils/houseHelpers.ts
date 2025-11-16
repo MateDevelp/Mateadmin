@@ -6,13 +6,13 @@
 // Formatta l'indirizzo completo
 export const formatAddress = (address: any): string => {
     if (!address) return 'Indirizzo non disponibile';
-    
+
     if (typeof address === 'string') return address;
-    
-    return address.fullAddress || 
-           address.shortAddress || 
-           `${address.street || ''} ${address.houseNumber || ''}`.trim() ||
-           'Indirizzo non disponibile';
+
+    return address.fullAddress ||
+        address.shortAddress ||
+        `${address.street || ''} ${address.houseNumber || ''}`.trim() ||
+        'Indirizzo non disponibile';
 };
 
 // Ottieni la città dall'indirizzo
@@ -50,7 +50,7 @@ export const getRoomsCount = (rooms: any): number => {
 export const getTotalBedsCount = (rooms: any): number => {
     if (!rooms || typeof rooms === 'number') return 0;
     if (!Array.isArray(rooms)) return 0;
-    
+
     return rooms.reduce((total, room) => {
         if (room.beds && Array.isArray(room.beds)) {
             return total + room.beds.reduce((sum: number, bed: any) => sum + (bed.capacity || 1), 0);
@@ -62,7 +62,7 @@ export const getTotalBedsCount = (rooms: any): number => {
 // Ottieni posti letto disponibili
 export const getAvailableBedsCount = (rooms: any): number => {
     if (!rooms || !Array.isArray(rooms)) return 0;
-    
+
     return rooms.reduce((total, room) => {
         if (room.beds && Array.isArray(room.beds)) {
             const available = room.beds.filter((bed: any) => !bed.assignedTo).length;
@@ -75,7 +75,7 @@ export const getAvailableBedsCount = (rooms: any): number => {
 // Calcola prezzo minimo
 export const getMinPrice = (rooms: any): number | null => {
     if (!rooms || !Array.isArray(rooms)) return null;
-    
+
     const prices: number[] = [];
     rooms.forEach(room => {
         if (room.beds && Array.isArray(room.beds)) {
@@ -87,14 +87,14 @@ export const getMinPrice = (rooms: any): number | null => {
             });
         }
     });
-    
+
     return prices.length > 0 ? Math.min(...prices) : null;
 };
 
 // Calcola prezzo massimo
 export const getMaxPrice = (rooms: any): number | null => {
     if (!rooms || !Array.isArray(rooms)) return null;
-    
+
     const prices: number[] = [];
     rooms.forEach(room => {
         if (room.beds && Array.isArray(room.beds)) {
@@ -106,7 +106,7 @@ export const getMaxPrice = (rooms: any): number | null => {
             });
         }
     });
-    
+
     return prices.length > 0 ? Math.max(...prices) : null;
 };
 
@@ -114,7 +114,7 @@ export const getMaxPrice = (rooms: any): number | null => {
 export const formatPriceRange = (rooms: any): string => {
     const min = getMinPrice(rooms);
     const max = getMaxPrice(rooms);
-    
+
     if (!min && !max) return 'Prezzo non disponibile';
     if (min === max) return `€${min}/mese`;
     return `€${min} - €${max}/mese`;
@@ -129,7 +129,7 @@ export const getActiveAmenitiesCount = (amenities: any): number => {
 // Ottieni lista amenities attive
 export const getActiveAmenities = (amenities: any): string[] => {
     if (!amenities) return [];
-    
+
     const amenityLabels: Record<string, string> = {
         wifi: 'Wi-Fi',
         washingMachine: 'Lavatrice',
@@ -144,7 +144,7 @@ export const getActiveAmenities = (amenities: any): string[] => {
         pets: 'Animali ammessi',
         utilities: 'Utenze incluse'
     };
-    
+
     return Object.entries(amenities)
         .filter(([_, value]) => value === true)
         .map(([key]) => amenityLabels[key] || key);
@@ -195,26 +195,26 @@ export const isHouseActive = (house: any): boolean => {
 // Ottieni status badges della casa
 export const getHouseStatusBadges = (house: any) => {
     const badges = [];
-    
+
     if (isHouseVerified(house)) {
         badges.push({ label: 'Verificata', color: 'bg-green-100 text-green-800' });
     } else {
         badges.push({ label: 'Non verificata', color: 'bg-yellow-100 text-yellow-800' });
     }
-    
+
     if (isHouseActive(house)) {
         badges.push({ label: 'Attiva', color: 'bg-blue-100 text-blue-800' });
     } else {
         badges.push({ label: 'Non attiva', color: 'bg-gray-100 text-gray-800' });
     }
-    
+
     const availableBeds = getAvailableBedsCount(house.rooms);
     if (availableBeds > 0) {
         badges.push({ label: `${availableBeds} posti liberi`, color: 'bg-purple-100 text-purple-800' });
     } else {
         badges.push({ label: 'Completa', color: 'bg-red-100 text-red-800' });
     }
-    
+
     return badges;
 };
 
@@ -246,4 +246,21 @@ export const getPhotosCount = (photos: any): number => {
 // Verifica se ha l'autorizzazione a pubblicare
 export const hasPublishAuthorization = (house: any): boolean => {
     return house.authorizedToPublish === true;
+};
+
+// Formatta rooms in stringa leggibile per React
+export const formatRoomsString = (rooms: any): string => {
+    if (!rooms) return '';
+    if (typeof rooms === 'number') return `${rooms} stanze`;
+    if (Array.isArray(rooms)) {
+        // Es: "3 stanze (Camera: 2 letti, Studio: 1 letto)"
+        const details = rooms.map((r: any) => {
+            if (typeof r === 'object' && r.name && r.beds !== undefined) {
+                return `${r.name}: ${r.beds} letti`;
+            }
+            return '';
+        }).filter(Boolean).join(', ');
+        return `${rooms.length} stanze${details ? ' (' + details + ')' : ''}`;
+    }
+    return '';
 };

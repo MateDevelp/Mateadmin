@@ -41,6 +41,7 @@ interface House {
         city?: string;
         fullAddress?: string;
         shortAddress?: string;
+        houseNumber?: string;
     };
     city?: string;
     price?: number;
@@ -70,14 +71,35 @@ export default function Houses() {
     const getAddressString = (address: House['address']): string => {
         if (!address) return '';
         if (typeof address === 'string') return address;
-        return address.fullAddress || address.shortAddress || address.street || '';
+        // Se è un oggetto, scegli il campo più completo disponibile
+        if (typeof address === 'object') {
+            return (
+                address.fullAddress ||
+                address.shortAddress ||
+                [address.street, address.houseNumber, address.city].filter(Boolean).join(' ') ||
+                address.street ||
+                address.city ||
+                ''
+            );
+        }
+        return '';
     };
 
-    // Helper per ottenere il numero di stanze
-    const getRoomsCount = (rooms: House['rooms']): number => {
-        if (!rooms) return 0;
-        if (typeof rooms === 'number') return rooms;
-        return rooms.length;
+    // Helper per ottenere il numero di stanze o una stringa descrittiva
+    const getRoomsString = (rooms: House['rooms']): string => {
+        if (!rooms) return '';
+        if (typeof rooms === 'number') return `${rooms} stanze`;
+        if (Array.isArray(rooms)) {
+            // Es: "3 stanze (Camera: 2 letti, Studio: 1 letto)"
+            const details = rooms.map(r => {
+                if (typeof r === 'object' && r.name && r.beds !== undefined) {
+                    return `${r.name}: ${r.beds} letti`;
+                }
+                return '';
+            }).filter(Boolean).join(', ');
+            return `${rooms.length} stanze${details ? ' (' + details + ')' : ''}`;
+        }
+        return '';
     };
 
     useEffect(() => {
@@ -362,7 +384,7 @@ export default function Houses() {
                                             {house.rooms && (
                                                 <div className="flex items-center gap-1">
                                                     <Users className="w-4 h-4" />
-                                                    <span>{getRoomsCount(house.rooms)} stanze</span>
+                                                    <span>{getRoomsString(house.rooms)}</span>
                                                 </div>
                                             )}
                                             {house.createdAt && (

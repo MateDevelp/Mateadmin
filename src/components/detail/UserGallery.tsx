@@ -11,7 +11,7 @@ interface UserGalleryProps {
 
 export default function UserGallery({ avatar, photoURL, gallery }: UserGalleryProps) {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
-    
+
     const allImages = [];
     if (avatar || photoURL) allImages.push(avatar || photoURL);
     if (gallery && gallery.length > 0) allImages.push(...gallery);

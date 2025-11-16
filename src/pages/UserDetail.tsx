@@ -260,7 +260,7 @@ export default function UserDetail() {
                 </div>
 
                 {/* User Gallery */}
-                <UserGallery 
+                <UserGallery
                     avatar={user.profileImageUrl}
                     photoURL={user.profileImageUrl}
                     gallery={user.photos}
@@ -302,13 +302,13 @@ export default function UserDetail() {
                         {/* Status Badges */}
                         <div className="flex flex-wrap gap-2">
                             {getUserStatusBadges(user).map((badge, idx) => (
-                                <Badge 
+                                <Badge
                                     key={idx}
                                     className={
                                         badge.variant === 'destructive' ? 'bg-red-100 text-red-800' :
-                                        badge.variant === 'success' ? 'bg-green-100 text-green-800' :
-                                        badge.variant === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-blue-100 text-blue-800'
+                                            badge.variant === 'success' ? 'bg-green-100 text-green-800' :
+                                                badge.variant === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-blue-100 text-blue-800'
                                     }
                                 >
                                     {badge.label}
@@ -416,7 +416,7 @@ export default function UserDetail() {
                 <UserTraits traits={user.traits} />
 
                 {/* User Preferences */}
-                <UserPreferences 
+                <UserPreferences
                     preferencesSelf={user.preferences?.self}
                     preferencesDesired={user.preferences?.desired}
                 />

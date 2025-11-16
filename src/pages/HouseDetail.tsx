@@ -28,16 +28,17 @@ import HousePhotos from '../components/detail/HousePhotos';
 import HouseRooms from '../components/detail/HouseRooms';
 import HouseAmenities from '../components/detail/HouseAmenities';
 import AddressCard from '../components/detail/AddressCard';
-import { 
-    formatHouseType, 
-    formatSize, 
-    formatFloor, 
+import {
+    formatHouseType,
+    formatSize,
+    formatFloor,
     formatExpenses,
     getHouseStatusBadges,
     formatPriceRange,
     getRoomsCount,
     getTotalBedsCount,
-    formatAddress
+    formatAddress,
+    formatRoomsString // <--- aggiunto
 } from '../utils/houseHelpers';
 
 interface HouseDetail {
@@ -265,11 +266,11 @@ export default function HouseDetail() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {getHouseStatusBadges(house).map((badge, idx) => (
-                                    <Badge 
+                                    <Badge
                                         key={idx}
-                                        className={badge.variant === 'success' ? 'bg-green-100 text-green-800' : 
-                                                   badge.variant === 'warning' ? 'bg-yellow-100 text-yellow-800' : 
-                                                   'bg-gray-100 text-gray-800'}
+                                        className={badge.variant === 'success' ? 'bg-green-100 text-green-800' :
+                                            badge.variant === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                                'bg-gray-100 text-gray-800'}
                                     >
                                         {badge.label}
                                     </Badge>
@@ -325,6 +326,14 @@ export default function HouseDetail() {
                             <div className="border-t pt-4">
                                 <p className="text-sm text-gray-600">Fascia di prezzo</p>
                                 <p className="font-semibold text-lg text-blue-600">{formatPriceRange(house.rooms)}</p>
+                            </div>
+                        )}
+
+                        {/* Rooms */}
+                        {house.rooms && (
+                            <div className="border-t pt-4">
+                                <p className="text-sm text-gray-600">Stanze</p>
+                                <p className="font-medium">{formatRoomsString(house.rooms)}</p>
                             </div>
                         )}
 

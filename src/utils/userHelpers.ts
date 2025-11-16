@@ -100,13 +100,13 @@ export const getProfileCompletionPercentage = (user: any): number => {
         'avatar',
         'gallery'
     ];
-    
+
     const completed = fields.filter(field => {
         const value = user[field];
         if (Array.isArray(value)) return value.length > 0;
         return !!value;
     }).length;
-    
+
     return Math.round((completed / fields.length) * 100);
 };
 
@@ -174,26 +174,26 @@ export const isUserBlocked = (user: any): boolean => {
 // Ottieni status badge dell'utente
 export const getUserStatusBadges = (user: any) => {
     const badges = [];
-    
+
     if (isUserAdmin(user)) {
         badges.push({ label: 'Admin', color: 'bg-purple-100 text-purple-800' });
     }
-    
+
     if (isUserVerified(user)) {
         badges.push({ label: 'Verificato', color: 'bg-green-100 text-green-800' });
     }
-    
+
     if (isUserBlocked(user)) {
         badges.push({ label: 'Bloccato', color: 'bg-red-100 text-red-800' });
     }
-    
+
     if (user.profilePaused) {
         badges.push({ label: 'Profilo in pausa', color: 'bg-yellow-100 text-yellow-800' });
     }
-    
+
     if (user.hasHouse) {
         badges.push({ label: 'Ha casa', color: 'bg-blue-100 text-blue-800' });
     }
-    
+
     return badges;
 };
